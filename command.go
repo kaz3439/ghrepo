@@ -181,24 +181,28 @@ func doCreate(c *cli.Context) {
 		return
 	}
 
-	prompt := c.Bool("detail")
+	prompt := c.Bool("details")
 	newRepository := github.Repository{Name: &name}
-	if c.String("description") != "" {
-		newRepository.Description = getRepositryField(c.String("description"), prompt).(*string)
+
+	if description := getRepositryField("description", c.String("description"), prompt).(string); description != "" {
+		newRepository.Description = &description
 	}
-	if c.String("homepage") != "" {
-		newRepository.Homepage = getRepositryField(c.String("homepage"), prompt).(*string)
+	if homepage := getRepositryField("homepage", c.String("homepage"), prompt).(string); homepage != "" {
+		newRepository.Homepage = &homepage
 	}
-	if c.Int("teamid") != 0 {
-		newRepository.TeamID = getRepositryField(c.Int("teamid"), prompt).(*int)
+	if teamid := getRepositryField("teamid", c.Int("teamid"), prompt).(int); teamid != 0 {
+		newRepository.TeamID = &teamid
 	}
 
-	newRepository.Private = getRepositryField(c.Bool("private"), prompt).(bool)
-	newRepository.HasIssues = getRepositryField(c.Bool("issue"), prompt).(bool)
-	newRepository.HasWiki = getRepositryField(c.Bool("wiki"), prompt).(bool)
-	newRepository.HasDownloads = getRepositryField(c.Bool("downloads"), prompt).(bool)
+	private := getRepositryField("private", c.Bool("private"), prompt).(bool)
+	newRepository.Private = &private
+	issue := getRepositryField("issue", c.Bool("issue"), prompt).(bool)
+	newRepository.HasIssues = &issue
+	wiki := getRepositryField("wiki", c.Bool("wiki"), prompt).(bool)
+	newRepository.HasWiki = &wiki
+	download := getRepositryField("download", c.Bool("downloads"), prompt).(bool)
+	newRepository.HasDownloads = &download
 
-	fmt.Printf("%#v", newRepository)
 	// Repositry structure doesn't have the followings
 	//autoinit := c.Int("autoinit")
 	//gitignore := c.String("gitignore")
@@ -214,12 +218,12 @@ func doCreate(c *cli.Context) {
 		configuration.Persist()
 	}
 
-	//client := setClient(configuration)
-	//repositry, _, createErr := client.Repositories.Create("", &newRepository)
-	//if createErr != nil {
-	//	return
-	//}
-	//fmt.Printf("%#v", repositry)
+	client := newGithubClient(configuration)
+	repositry, _, createErr := client.Repositories.Create("", &newRepository)
+	if createErr != nil {
+		return
+	}
+	fmt.Printf("%#v", repositry)
 }
 
 func promptPersonalGithubToken() string {
@@ -230,7 +234,7 @@ func promptPersonalGithubToken() string {
 	return githubToken
 }
 
-func setClient(configuration *Configuration) *github.Client {
+func newGithubClient(configuration *Configuration) *github.Client {
 	t := &oauth.Transport{
 		Token: &oauth.Token{AccessToken: configuration.GithubToken},
 	}
@@ -239,24 +243,42 @@ func setClient(configuration *Configuration) *github.Client {
 	return client
 }
 
-func getRepositryField(field interface{}, prompt bool) interface{} {
+func getRepositryField(name string, field interface{}, prompt bool) interface{} {
 	if prompt == false {
 		return field
 	}
 
-	scan := bufio.NewScanner(os.Stdin)
-	defaultValue := ""
+	var defaultPrompt string
 	switch field.(type) {
 	case string:
-		defaultValue = field.(string)
+		defaultPrompt = field.(string)
 	case bool:
-		defaultValue = strconv.FormatBool(field.(bool))
+		defaultPrompt = strconv.FormatBool(field.(bool))
 	case int:
-		defaultValue = strconv.FormatInt(field.(int64), 10)
+		if field.(int) != 0 {
+			defaultPrompt = strconv.FormatInt(int64(field.(int)), 10)
+		} else {
+			defaultPrompt = ""
+		}
+	default:
+		defaultPrompt = ""
 	}
 
-	fmt.Printf("description [%s] : ", defaultValue)
+	fmt.Printf("%s [%s] : ", name, defaultPrompt)
+	scan := bufio.NewScanner(os.Stdin)
 	scan.Scan()
-	field = scan.Text()
+	text := scan.Text()
+	switch field.(type) {
+	case bool:
+		if res, err := strconv.ParseBool(text); err != nil {
+			field = res
+		}
+	case int:
+		if res, err := strconv.ParseInt(text, 10, 0); err != nil {
+			field = int(res)
+		}
+	default:
+		field = text
+	}
 	return field
 }
