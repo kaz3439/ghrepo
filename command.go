@@ -45,6 +45,37 @@ var createFlags = []cli.Flag{
 	},
 }
 
+var editFlags = []cli.Flag{
+	cli.StringFlag{
+		Name:  "name, N",
+		Usage: "",
+	},
+	cli.StringFlag{
+		Name:  "description, D",
+		Usage: "",
+	},
+	cli.StringFlag{
+		Name:  "homepage, H",
+		Usage: "",
+	},
+	cli.BoolTFlag{
+		Name:  "issue, I",
+		Usage: "",
+	},
+	cli.BoolTFlag{
+		Name:  "wiki, W",
+		Usage: "",
+	},
+	cli.BoolTFlag{
+		Name:  "download, X",
+		Usage: "",
+	},
+	cli.BoolFlag{
+		Name:  "details, d",
+		Usage: "",
+	},
+}
+
 var Commands = []cli.Command{
 	commandCreate,
 	commandOpen,
@@ -80,8 +111,8 @@ var commandEdit = cli.Command{
 	ShortName:   "e",
 	Usage:       "edit repository",
 	Description: "",
-	Action: func(c *cli.Context) {
-	},
+	Flags:       editFlags,
+	Action:      doEdit,
 }
 
 var commandToken = cli.Command{
@@ -179,6 +210,82 @@ func doCreate(c *cli.Context) {
 		"=========================\n" +
 		"\n\n"
 	fmt.Printf(output, *repositry.GitURL)
+}
+
+func doEdit(c *cli.Context) {
+	owner := c.Args().Get(0)
+	repo := c.Args().Get(1)
+	if len(owner) == 0 || len(repo) == 0 {
+		return
+	}
+
+	// check configuration
+	configuration, err := OpenConfiguration()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if configuration.GithubToken == "" {
+		configuration.GithubToken = promptPersonalGithubToken()
+		configuration.Persist()
+	}
+
+	client := newGithubClient(configuration)
+
+	// get repository
+	repository, _, err := client.Repositories.Get(owner, repo)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// set repository attributes
+	repository = &github.Repository{}
+	prompt := c.Bool("details")
+	if name := getRepositryField("name", c.String("name"), prompt).(string); name != "" {
+		repository.Name = &name
+	}
+	if description := getRepositryField("description", c.String("description"), prompt).(string); description != "" {
+		repository.Description = &description
+	}
+	if homepage := getRepositryField("homepage", c.String("homepage"), prompt).(string); homepage != "" {
+		repository.Homepage = &homepage
+	}
+	if issue := getRepositryField("issue", c.String("issue"), prompt).(bool); issue != *repository.HasIssues {
+		repository.HasIssues = &issue
+	}
+	if wiki := getRepositryField("wiki", c.String("wiki"), prompt).(bool); wiki != *repository.HasWiki {
+		repository.HasWiki = &wiki
+	}
+	if download := getRepositryField("download", c.String("download"), prompt).(bool); download != *repository.HasDownloads {
+		repository.HasDownloads = &download
+	}
+
+	// edit repository
+	edittedRepository, _, editErr := client.Repositories.Edit(owner, repo, repository)
+	if editErr != nil {
+		fmt.Println(editErr)
+		return
+	}
+	output := "\n\n" +
+		"=========================\n" +
+		"                         \n" +
+		"* We are sccessful in Editting the repository!\n" +
+		"name:        %s          \n" +
+		"description: %s          \n" +
+		"homepage:    %s          \n" +
+		"issue:       %s          \n" +
+		"wiki:        %s          \n" +
+		"download:    %s          \n" +
+		"=========================\n" +
+		"\n\n"
+	fmt.Printf(output, edittedRepository.Name,
+		edittedRepository.Description,
+		edittedRepository.Homepage,
+		edittedRepository.HasIssues,
+		edittedRepository.HasWiki,
+		edittedRepository.HasDownloads)
+
 }
 
 func promptPersonalGithubToken() string {
