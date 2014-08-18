@@ -71,15 +71,15 @@ var createFlags = []cli.Flag{
 		Name:  "private, P",
 		Usage: "",
 	},
-	cli.BoolFlag{
+	cli.BoolTFlag{
 		Name:  "issue, I",
 		Usage: "",
 	},
-	cli.BoolFlag{
+	cli.BoolTFlag{
 		Name:  "wiki, W",
 		Usage: "",
 	},
-	cli.BoolFlag{
+	cli.BoolTFlag{
 		Name:  "download, X",
 		Usage: "",
 	},
@@ -181,64 +181,28 @@ func doCreate(c *cli.Context) {
 		return
 	}
 
+	prompt := c.Bool("detail")
 	newRepository := github.Repository{Name: &name}
-	if description := c.String("description"); description != "" {
-		newRepository.Description = &description
+	if c.String("description") != "" {
+		newRepository.Description = getRepositryField(c.String("description"), prompt).(*string)
 	}
-	if homepage := c.String("homepage"); homepage != "" {
-		newRepository.Homepage = &homepage
+	if c.String("homepage") != "" {
+		newRepository.Homepage = getRepositryField(c.String("homepage"), prompt).(*string)
 	}
-	if private := c.Bool("private"); private != false {
-		newRepository.Private = &private
-	}
-	if issue := c.Bool("issue"); issue != false {
-		newRepository.HasIssues = &issue
-	}
-	if wiki := c.Bool("wiki"); wiki != false {
-		newRepository.HasWiki = &wiki
-	}
-	if downloads := c.Bool("downloads"); downloads != false {
-		newRepository.HasDownloads = &downloads
-	}
-	if teamid := c.Int("teamid"); teamid != 0 {
-		newRepository.TeamID = &teamid
+	if c.Int("teamid") != 0 {
+		newRepository.TeamID = getRepositryField(c.Int("teamid"), prompt).(*int)
 	}
 
+	newRepository.Private = getRepositryField(c.Bool("private"), prompt).(bool)
+	newRepository.HasIssues = getRepositryField(c.Bool("issue"), prompt).(bool)
+	newRepository.HasWiki = getRepositryField(c.Bool("wiki"), prompt).(bool)
+	newRepository.HasDownloads = getRepositryField(c.Bool("downloads"), prompt).(bool)
+
+	fmt.Printf("%#v", newRepository)
 	// Repositry structure doesn't have the followings
 	//autoinit := c.Int("autoinit")
 	//gitignore := c.String("gitignore")
 	//license := c.String("license")
-
-	scan := bufio.NewScanner(os.Stdin)
-	description := ""
-	if newRepository.Description != nil {
-		description = *newRepository.Description
-	}
-	fmt.Printf("description [%s] : ", description)
-	scan.Scan()
-	description = scan.Text()
-
-	homepage := ""
-	if newRepository.Homepage != nil {
-		homepage = *newRepository.Homepage
-	}
-	fmt.Printf("homepage [%s] : ", homepage)
-	scan.Scan()
-	homepage = scan.Text()
-
-	private := false
-	if newRepository.Private != nil {
-		private = *newRepository.Private
-	}
-	fmt.Printf("private [%s] : ", strconv.FormatBool(private))
-	scan.Scan()
-	private, _ = strconv.ParseBool(scan.Text())
-	//if detailFlag := c.Bool("detail"); detailFlag == true {
-	//	if newRepository.description != nil {
-	//		scanner.Scan()
-	//		githubToken := scanner.Text()
-	//	}
-	//}
 
 	configuration, err := OpenConfiguration()
 	if err != nil {
@@ -273,4 +237,26 @@ func setClient(configuration *Configuration) *github.Client {
 
 	client := github.NewClient(t.Client())
 	return client
+}
+
+func getRepositryField(field interface{}, prompt bool) interface{} {
+	if prompt == false {
+		return field
+	}
+
+	scan := bufio.NewScanner(os.Stdin)
+	defaultValue := ""
+	switch field.(type) {
+	case string:
+		defaultValue = field.(string)
+	case bool:
+		defaultValue = strconv.FormatBool(field.(bool))
+	case int:
+		defaultValue = strconv.FormatInt(field.(int64), 10)
+	}
+
+	fmt.Printf("description [%s] : ", defaultValue)
+	scan.Scan()
+	field = scan.Text()
+	return field
 }
