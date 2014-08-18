@@ -58,15 +58,6 @@ var createFlags = []cli.Flag{
 		Name:  "homepage, H",
 		Usage: "",
 	},
-
-	cli.StringFlag{
-		Name:  "gitignore, G",
-		Usage: "",
-	},
-	cli.StringFlag{
-		Name:  "license, L",
-		Usage: "",
-	},
 	cli.BoolFlag{
 		Name:  "private, P",
 		Usage: "",
@@ -81,10 +72,6 @@ var createFlags = []cli.Flag{
 	},
 	cli.BoolTFlag{
 		Name:  "download, X",
-		Usage: "",
-	},
-	cli.BoolFlag{
-		Name:  "autoinit, A",
 		Usage: "",
 	},
 	cli.IntFlag{
@@ -181,9 +168,20 @@ func doCreate(c *cli.Context) {
 		return
 	}
 
-	prompt := c.Bool("details")
-	newRepository := github.Repository{Name: &name}
+	// check configuration
+	configuration, err := OpenConfiguration()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if configuration.GithubToken == "" {
+		configuration.GithubToken = promptPersonalGithubToken()
+		configuration.Persist()
+	}
 
+	// set repository attributes
+	newRepository := github.Repository{Name: &name}
+	prompt := c.Bool("details")
 	if description := getRepositryField("description", c.String("description"), prompt).(string); description != "" {
 		newRepository.Description = &description
 	}
@@ -193,7 +191,6 @@ func doCreate(c *cli.Context) {
 	if teamid := getRepositryField("teamid", c.Int("teamid"), prompt).(int); teamid != 0 {
 		newRepository.TeamID = &teamid
 	}
-
 	private := getRepositryField("private", c.Bool("private"), prompt).(bool)
 	newRepository.Private = &private
 	issue := getRepositryField("issue", c.Bool("issue"), prompt).(bool)
@@ -203,27 +200,24 @@ func doCreate(c *cli.Context) {
 	download := getRepositryField("download", c.Bool("downloads"), prompt).(bool)
 	newRepository.HasDownloads = &download
 
-	// Repositry structure doesn't have the followings
-	//autoinit := c.Int("autoinit")
-	//gitignore := c.String("gitignore")
-	//license := c.String("license")
-
-	configuration, err := OpenConfiguration()
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	if configuration.GithubToken == "" {
-		configuration.GithubToken = promptPersonalGithubToken()
-		configuration.Persist()
-	}
-
+	// create repository
 	client := newGithubClient(configuration)
 	repositry, _, createErr := client.Repositories.Create("", &newRepository)
 	if createErr != nil {
+		fmt.Println(createErr)
 		return
 	}
-	fmt.Printf("%#v", repositry)
+	output := "\n\n" +
+		"=========================\n" +
+		"                         \n" +
+		"* We are sccessful in Creating a repository! Push an existing repository from the command line\n" +
+		"                         \n" +
+		"git remote add origin %s \n" +
+		"git push -u origin master\n" +
+		"                         \n" +
+		"=========================\n" +
+		"\n\n"
+	fmt.Printf(output, *repositry.GitURL)
 }
 
 func promptPersonalGithubToken() string {
