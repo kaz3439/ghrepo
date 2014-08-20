@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"regexp"
 	"github.com/skratchdot/open-golang/open"
+	"path/filepath"
 )
 
 
@@ -311,14 +312,28 @@ type GitConfig struct {
 }
 
 func doOpen(c *cli.Context) {
+  dir, pathErr := filepath.Abs(filepath.Dir(os.Args[0]))
+  if pathErr != nil {
+    fmt.Println(pathErr)
+    return
+  }
+
+  gitconfigPath := fmt.Sprintf("%s/.git/config", dir)
+  finfo, configFileErr := os.Stat(gitconfigPath)
+  if configFileErr != nil || finfo.IsDir() {
+    fmt.Println(".git/config not found")
+    return
+  }
+
   gitconfig := &GitConfig{}
-  err := gcfg.ReadFileInto(gitconfig, ".git/config")
+  err := gcfg.ReadFileInto(gitconfig, gitconfigPath)
   if err != nil {
     fmt.Println(err)
   }
-  reg, _ := regexp.Compile("git@github.com:(.+)")
+
+  reg, _ := regexp.Compile("git@github.com:(.+).git")
   matches := reg.FindStringSubmatch(gitconfig.Remote["origin"].Url)
-  githuburl := fmt.Sprintf("https://github.com/%s", matches[1])
+  githuburl := fmt.Sprintf("https://github.com/%s/tree/master", matches[1])
   openErr := open.Run(githuburl)
   if openErr != nil {
     fmt.Println(openErr)
