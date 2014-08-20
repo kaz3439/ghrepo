@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"github.com/codegangsta/cli"
 	"github.com/google/go-github/github"
+	"code.google.com/p/gcfg"
 	"os"
 	"strconv"
+	"regexp"
+	"github.com/skratchdot/open-golang/open"
 )
+
 
 var createFlags = []cli.Flag{
 	cli.StringFlag{
@@ -102,8 +106,7 @@ var commandOpen = cli.Command{
 	ShortName:   "o",
 	Usage:       "open repository on browser",
 	Description: "",
-	Action: func(c *cli.Context) {
-	},
+	Action: doOpen,
 }
 
 var commandEdit = cli.Command{
@@ -286,6 +289,40 @@ func doEdit(c *cli.Context) {
 		edittedRepository.HasWiki,
 		edittedRepository.HasDownloads)
 
+}
+
+type GitConfig struct {
+  Core struct {
+    Repositoryformatversion int
+    Filemode bool
+    Bare bool
+    Logallrefupdates bool
+    Ignorecase bool
+    Precomposeunicode bool
+  }
+  Remote map[string]*struct {
+    Url string
+    Fetch string
+  }
+  Branch map[string]*struct {
+    Remote string
+    Merge string
+  }
+}
+
+func doOpen(c *cli.Context) {
+  gitconfig := &GitConfig{}
+  err := gcfg.ReadFileInto(gitconfig, ".git/config")
+  if err != nil {
+    fmt.Println(err)
+  }
+  reg, _ := regexp.Compile("git@github.com:(.+)")
+  matches := reg.FindStringSubmatch(gitconfig.Remote["origin"].Url)
+  githuburl := fmt.Sprintf("https://github.com/%s", matches[1])
+  openErr := open.Run(githuburl)
+  if openErr != nil {
+    fmt.Println(openErr)
+  }
 }
 
 func promptPersonalGithubToken() string {
