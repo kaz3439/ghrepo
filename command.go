@@ -3,14 +3,17 @@ package main
 import (
 	"bufio"
 	"code.google.com/p/goauth2/oauth"
+	"errors"
 	"fmt"
 	"github.com/codegangsta/cli"
 	"github.com/google/go-github/github"
+	"github.com/skratchdot/open-golang/open"
+	"github.com/wsxiaoys/terminal/color"
 	"code.google.com/p/gcfg"
 	"os"
 	"strconv"
+	"time"
 	"regexp"
-	"github.com/skratchdot/open-golang/open"
 	"path/filepath"
 )
 
@@ -49,6 +52,18 @@ var createFlags = []cli.Flag{
 		Usage: "",
 	},
 }
+
+const (
+  flagDesc = "description"
+  flagHP = "homepage"
+  flagPrivate = "private"
+  flagIssue = "issue"
+  flagWiki = "wiki"
+  flagTeamID = "teamid"
+  flagDownload = "download"
+  flagName = "name"
+  flagDetail = "details"
+)
 
 var editFlags = []cli.Flag{
 	cli.StringFlag{
@@ -177,43 +192,72 @@ func doCreate(c *cli.Context) {
 
 	// set repository attributes
 	newRepository := github.Repository{Name: &name}
-	prompt := c.Bool("details")
-	if description := getRepositryField("description", c.String("description"), prompt).(string); description != "" {
+	prompt := c.Bool(flagDetail)
+	if description := getRepositryField(flagDesc, c.String(flagDesc), prompt).(string); description != "" {
 		newRepository.Description = &description
 	}
-	if homepage := getRepositryField("homepage", c.String("homepage"), prompt).(string); homepage != "" {
+	if homepage := getRepositryField(flagHP, c.String(flagHP), prompt).(string); homepage != "" {
 		newRepository.Homepage = &homepage
 	}
-	if teamid := getRepositryField("teamid", c.Int("teamid"), prompt).(int); teamid != 0 {
+	if teamid := getRepositryField(flagTeamID, c.Int(flagTeamID), prompt).(int); teamid != 0 {
 		newRepository.TeamID = &teamid
 	}
-	private := getRepositryField("private", c.Bool("private"), prompt).(bool)
+	private := getRepositryField(flagPrivate, c.Bool(flagPrivate), prompt).(bool)
 	newRepository.Private = &private
-	issue := getRepositryField("issue", c.Bool("issue"), prompt).(bool)
+	issue := getRepositryField(flagIssue, c.Bool(flagIssue), prompt).(bool)
 	newRepository.HasIssues = &issue
-	wiki := getRepositryField("wiki", c.Bool("wiki"), prompt).(bool)
+	wiki := getRepositryField(flagWiki, c.Bool(flagWiki), prompt).(bool)
 	newRepository.HasWiki = &wiki
-	download := getRepositryField("download", c.Bool("downloads"), prompt).(bool)
+	download := getRepositryField(flagDownload, c.Bool(flagDownload), prompt).(bool)
 	newRepository.HasDownloads = &download
 
 	// create repository
 	client := newGithubClient(configuration)
-	repositry, _, createErr := client.Repositories.Create("", &newRepository)
-	if createErr != nil {
+	networkError := make(chan error)
+	resultRepository := make(chan *github.Repository)
+	go func () {
+	  repository, _, createErr := client.Repositories.Create("", &newRepository)
+	  if createErr != nil {
+	    networkError <- createErr
+	  }
+	  resultRepository <- repository
+	}()
+
+	var repository *github.Repository
+
+	loop:
+	  for {
+	    select {
+	    case createErr := <-networkError:
+		fmt.Printf("\n\n")
+		color.Printf("@{r}!!! Error Occured !!!")
+		fmt.Printf("\n\n")
 		fmt.Println(createErr)
-		return
+		fmt.Printf("\n\n")
+		break loop
+	      case repository = <-resultRepository:
+		break loop
+	      default:
+		time.Sleep(time.Second/2)
+		fmt.Printf(".")
+	    }
+	  }
+
+	if repository == nil {
+	  return
 	}
+
 	output := "\n\n" +
 		"=========================\n" +
 		"                         \n" +
-		"* We are sccessful in Creating a repository! Push an existing repository from the command line\n" +
+		"@{g}* We are sccessful in Creating a repository! Push an existing repository from the command line@{|}\n" +
 		"                         \n" +
 		"git remote add origin %s \n" +
 		"git push -u origin master\n" +
 		"                         \n" +
 		"=========================\n" +
 		"\n\n"
-	fmt.Printf(output, *repositry.GitURL)
+	color.Printf(output, *repository.GitURL)
 }
 
 func doEdit(c *cli.Context) {
@@ -245,36 +289,61 @@ func doEdit(c *cli.Context) {
 
 	// set repository attributes
 	repository = &github.Repository{}
-	prompt := c.Bool("details")
-	if name := getRepositryField("name", c.String("name"), prompt).(string); name != "" {
+	prompt := c.Bool(flagDetail)
+	if name := getRepositryField(flagName, c.String(flagName), prompt).(string); name != "" {
 		repository.Name = &name
 	}
-	if description := getRepositryField("description", c.String("description"), prompt).(string); description != "" {
+	if description := getRepositryField(flagDesc, c.String(flagDesc), prompt).(string); description != "" {
 		repository.Description = &description
 	}
-	if homepage := getRepositryField("homepage", c.String("homepage"), prompt).(string); homepage != "" {
+	if homepage := getRepositryField(flagHP, c.String(flagHP), prompt).(string); homepage != "" {
 		repository.Homepage = &homepage
 	}
-	if issue := getRepositryField("issue", c.String("issue"), prompt).(bool); issue != *repository.HasIssues {
+	if issue := getRepositryField(flagIssue, c.String(flagIssue), prompt).(bool); issue != *repository.HasIssues {
 		repository.HasIssues = &issue
 	}
-	if wiki := getRepositryField("wiki", c.String("wiki"), prompt).(bool); wiki != *repository.HasWiki {
+	if wiki := getRepositryField(flagWiki, c.String(flagWiki), prompt).(bool); wiki != *repository.HasWiki {
 		repository.HasWiki = &wiki
 	}
-	if download := getRepositryField("download", c.String("download"), prompt).(bool); download != *repository.HasDownloads {
+	if download := getRepositryField(flagDownload, c.String(flagDownload), prompt).(bool); download != *repository.HasDownloads {
 		repository.HasDownloads = &download
 	}
 
 	// edit repository
-	edittedRepository, _, editErr := client.Repositories.Edit(owner, repo, repository)
-	if editErr != nil {
+	connectionErr := make(chan error)
+	resultRepository := make(chan *github.Repository)
+	go func () {
+	  edittedRepository, _, editErr := client.Repositories.Edit(owner, repo, repository)
+	  if editErr != nil {
+	    connectionErr <- editErr
+	    return
+	  }
+	  resultRepository <- edittedRepository
+	}()
+
+	var edittedRepository *github.Repository
+	loop:
+	  for {
+	    select {
+	      case editErr := <-connectionErr:
+		fmt.Printf("\n\n")
+		color.Printf("@{r} !!! Error Occuered !!! ")
+		fmt.Printf("\n\n")
 		fmt.Println(editErr)
-		return
-	}
+		fmt.Printf("\n\n")
+		break loop
+	      case edittedRepository = <-resultRepository:
+		break loop
+	      default:
+		time.Sleep(time.Second)
+		fmt.Printf(".")
+	    }
+	  }
+
 	output := "\n\n" +
 		"=========================\n" +
 		"                         \n" +
-		"* We are sccessful in Editting the repository!\n" +
+		"@{g}* We are sccessful in Editting the repository!\n@{|}" +
 		"name:        %s          \n" +
 		"description: %s          \n" +
 		"homepage:    %s          \n" +
@@ -283,12 +352,12 @@ func doEdit(c *cli.Context) {
 		"download:    %s          \n" +
 		"=========================\n" +
 		"\n\n"
-	fmt.Printf(output, edittedRepository.Name,
-		edittedRepository.Description,
-		edittedRepository.Homepage,
-		edittedRepository.HasIssues,
-		edittedRepository.HasWiki,
-		edittedRepository.HasDownloads)
+	color.Printf(output, *edittedRepository.Name,
+		*edittedRepository.Description,
+		*edittedRepository.Homepage,
+		*edittedRepository.HasIssues,
+		*edittedRepository.HasWiki,
+		*edittedRepository.HasDownloads)
 
 }
 
@@ -315,8 +384,9 @@ func doOpen(c *cli.Context) {
   remote := c.Args().Get(0)
   tree := c.Args().Get(1)
 
-  gitconfig := getGitConfig()
-  if gitconfig == nil {
+  gitconfig, configErr := getGitConfig()
+  if configErr != nil {
+    fmt.Println(configErr)
     return
   }
 
@@ -412,26 +482,26 @@ func getRepositryField(name string, field interface{}, prompt bool) interface{} 
 	return field
 }
 
-func getGitConfig() *GitConfig {
-  dir, pathErr := filepath.Abs(filepath.Dir(os.Args[0]))
+const gitConfigRelativePath = ".git/config"
+
+func getGitConfig() (*GitConfig, error) {
+  currentDirectory, pathErr := filepath.Abs(filepath.Dir(os.Args[0]))
   if pathErr != nil {
-    fmt.Println(pathErr)
-    return nil
+    return nil, pathErr
   }
-  gitconfigPath := fmt.Sprintf("%s/.git/config", dir)
+  gitconfigPath := fmt.Sprintf("%s/%s", currentDirectory, gitConfigRelativePath)
   finfo, configFileErr := os.Stat(gitconfigPath)
   if configFileErr != nil || finfo.IsDir() {
-    fmt.Println(".git/config not found")
-    return nil
+    fileNotFoundError := errors.New("configuration file not found")
+    return nil, fileNotFoundError
   }
 
   gitconfig := &GitConfig{}
   err := gcfg.ReadFileInto(gitconfig, gitconfigPath)
   if err != nil {
-    fmt.Println(err)
-    return nil
+    return nil, err
   }
-  return gitconfig
+  return gitconfig, nil
 }
 
 func remoteIsURLPath(remote string) bool {
@@ -442,15 +512,20 @@ func remoteIsURLPath(remote string) bool {
   }
 }
 
+const (
+  sshURLRegex = "git@github.com:(.+).git"
+  svnURLRegex = "(https://github.com/.+).git"
+)
+
 func getUrlFromConfigRemote(remoteUrl string) string {
-  sshRegex := regexp.MustCompile("git@github.com:(.+).git")
-  svnRegex := regexp.MustCompile("(https://github.com/.+).git")
+  sshRegex := regexp.MustCompile(sshURLRegex)
+  svnRegex := regexp.MustCompile(svnURLRegex)
   var githubUrl string
-  if  sshMatches := sshRegex.FindStringSubmatch(remoteUrl); len(sshMatches) == 2 {
+  if  sshMatches := sshRegex.FindStringSubmatch(remoteUrl); len(sshMatches) == 2 { //ssh
     githubUrl = fmt.Sprintf("https://github.com/%s", sshMatches[1])
-  } else if svnMatches := svnRegex.FindStringSubmatch(remoteUrl); len(svnMatches) == 2  {
+  } else if svnMatches := svnRegex.FindStringSubmatch(remoteUrl); len(svnMatches) == 2  { //svn
     githubUrl = svnMatches[1]
-  } else {
+  } else { //https
     githubUrl = remoteUrl
   }
   return githubUrl
