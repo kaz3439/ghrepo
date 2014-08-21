@@ -312,29 +312,44 @@ type GitConfig struct {
 }
 
 func doOpen(c *cli.Context) {
-  dir, pathErr := filepath.Abs(filepath.Dir(os.Args[0]))
-  if pathErr != nil {
-    fmt.Println(pathErr)
+  remote := c.Args().Get(0)
+  tree := c.Args().Get(1)
+
+  gitconfig := getGitConfig()
+  if gitconfig == nil {
     return
   }
 
-  gitconfigPath := fmt.Sprintf("%s/.git/config", dir)
-  finfo, configFileErr := os.Stat(gitconfigPath)
-  if configFileErr != nil || finfo.IsDir() {
-    fmt.Println(".git/config not found")
-    return
+  if remote == "" {
+    for key := range gitconfig.Branch {
+      tree = key
+      break
+    }
+    if gitconfig.Branch[tree] == nil {
+      fmt.Println("invalid branch name")
+      return
+    }
+    remote = gitconfig.Branch[tree].Remote
   }
 
-  gitconfig := &GitConfig{}
-  err := gcfg.ReadFileInto(gitconfig, gitconfigPath)
-  if err != nil {
-    fmt.Println(err)
+  var githubUrl string
+  if remoteIsURLPath(remote) {
+    githubUrl = fmt.Sprintf("https://github.com/%s", remote)
+  } else {
+    if gitconfig.Remote[remote] == nil {
+      fmt.Println("invalid remote name")
+      return
+    }
+    githubUrl = getUrlFromConfigRemote(gitconfig.Remote[remote].Url)
   }
 
-  reg, _ := regexp.Compile("git@github.com:(.+).git")
-  matches := reg.FindStringSubmatch(gitconfig.Remote["origin"].Url)
-  githuburl := fmt.Sprintf("https://github.com/%s/tree/master", matches[1])
-  openErr := open.Run(githuburl)
+  var openURL string
+  if tree != "" {
+    openURL = fmt.Sprintf("%s/tree/%s", githubUrl, tree)
+  } else {
+    openURL = githubUrl
+  }
+  openErr := open.Run(openURL)
   if openErr != nil {
     fmt.Println(openErr)
   }
@@ -395,4 +410,48 @@ func getRepositryField(name string, field interface{}, prompt bool) interface{} 
 		field = text
 	}
 	return field
+}
+
+func getGitConfig() *GitConfig {
+  dir, pathErr := filepath.Abs(filepath.Dir(os.Args[0]))
+  if pathErr != nil {
+    fmt.Println(pathErr)
+    return nil
+  }
+  gitconfigPath := fmt.Sprintf("%s/.git/config", dir)
+  finfo, configFileErr := os.Stat(gitconfigPath)
+  if configFileErr != nil || finfo.IsDir() {
+    fmt.Println(".git/config not found")
+    return nil
+  }
+
+  gitconfig := &GitConfig{}
+  err := gcfg.ReadFileInto(gitconfig, gitconfigPath)
+  if err != nil {
+    fmt.Println(err)
+    return nil
+  }
+  return gitconfig
+}
+
+func remoteIsURLPath(remote string) bool {
+  if regexp.MustCompile("^[^/]+/[^/]+$").MatchString(remote) {
+    return true
+  } else {
+    return false
+  }
+}
+
+func getUrlFromConfigRemote(remoteUrl string) string {
+  sshRegex := regexp.MustCompile("git@github.com:(.+).git")
+  svnRegex := regexp.MustCompile("(https://github.com/.+).git")
+  var githubUrl string
+  if  sshMatches := sshRegex.FindStringSubmatch(remoteUrl); len(sshMatches) == 2 {
+    githubUrl = fmt.Sprintf("https://github.com/%s", sshMatches[1])
+  } else if svnMatches := svnRegex.FindStringSubmatch(remoteUrl); len(svnMatches) == 2  {
+    githubUrl = svnMatches[1]
+  } else {
+    githubUrl = remoteUrl
+  }
+  return githubUrl
 }
