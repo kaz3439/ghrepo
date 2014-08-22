@@ -214,11 +214,11 @@ func doCreate(c *cli.Context) {
 
 	// create repository
 	org := c.String(flagOrg)
-	client := newGithubClient(configuration)
+	client := NewClient(configuration)
 	networkError := make(chan error)
 	resultRepository := make(chan *github.Repository)
 	go func () {
-	  repository, _, createErr := client.Repositories.Create(org, &newRepository)
+	  repository, createErr := client.CreateRepository(org, &newRepository)
 	  if createErr != nil {
 	    networkError <- createErr
 	  }
@@ -283,10 +283,10 @@ func doEdit(c *cli.Context) {
 		configuration.Persist()
 	}
 
-	client := newGithubClient(configuration)
+	client := NewClient(configuration)
 
 	// get repository
-	repository, _, err := client.Repositories.Get(owner, repo)
+	repository, err := client.GetRepository(owner, repo)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -318,7 +318,7 @@ func doEdit(c *cli.Context) {
 	connectionErr := make(chan error)
 	resultRepository := make(chan *github.Repository)
 	go func () {
-	  edittedRepository, _, editErr := client.Repositories.Edit(owner, repo, repository)
+	  edittedRepository, editErr := client.EditRepository(owner, repo, repository)
 	  if editErr != nil {
 	    connectionErr <- editErr
 	    return
@@ -415,15 +415,6 @@ func promptPersonalGithubToken() string {
 	scanner.Scan()
 	githubToken := scanner.Text()
 	return githubToken
-}
-
-func newGithubClient(configuration *Configuration) *github.Client {
-	t := &oauth.Transport{
-		Token: &oauth.Token{AccessToken: configuration.GithubToken},
-	}
-
-	client := github.NewClient(t.Client())
-	return client
 }
 
 func getRepositryField(name string, field interface{}, prompt bool) interface{} {
