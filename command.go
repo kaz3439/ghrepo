@@ -275,7 +275,7 @@ func doEdit(c *cli.Context) {
 		return
 	}
 	if configuration.GithubToken == "" {
-		configuration.GithubToken = promptPersonalGithubToken()
+		configuration.GithubToken = PromptPersonalGithubToken()
 		configuration.Persist()
 	}
 

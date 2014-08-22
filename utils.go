@@ -4,6 +4,7 @@ import (
   "fmt"
   "strconv"
   "bufio"
+  "os"
 )
 
 func PromptPersonalGithubToken() string {

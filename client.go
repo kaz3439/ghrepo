@@ -1,8 +1,6 @@
 package main
 
 import (
-  "bufio"
-  "os"
   "github.com/google/go-github/github"
   "code.google.com/p/goauth2/oauth"
 )
