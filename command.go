@@ -10,21 +10,13 @@ import (
 )
 
 
-var createFlags = []cli.Flag{
-	cli.StringFlag{
-		Name:  "organization, O",
-		Usage: "",
-	},
+var createAndEditFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "description, D",
 		Usage: "",
 	},
 	cli.StringFlag{
 		Name:  "homepage, H",
-		Usage: "",
-	},
-	cli.BoolFlag{
-		Name:  "private, P",
 		Usage: "",
 	},
 	cli.BoolTFlag{
@@ -39,15 +31,34 @@ var createFlags = []cli.Flag{
 		Name:  "download, X",
 		Usage: "",
 	},
-	cli.IntFlag{
-		Name:  "teamid, T",
-		Usage: "",
-	},
 	cli.BoolFlag{
 		Name:  "details, d",
 		Usage: "",
 	},
+
 }
+
+var createFlags = append([]cli.Flag{
+	cli.IntFlag{
+		Name:  "teamid, T",
+		Usage: "",
+	},
+	cli.StringFlag{
+		Name:  "organization, O",
+		Usage: "",
+	},
+	cli.BoolFlag{
+		Name:  "private, P",
+		Usage: "",
+	},
+}, createAndEditFlags...)
+
+var editFlags = append([]cli.Flag{
+	cli.StringFlag{
+		Name:  "name, N",
+		Usage: "",
+	},
+}, createAndEditFlags...)
 
 const (
   flagOrg = "organization"
@@ -61,37 +72,6 @@ const (
   flagName = "name"
   flagDetail = "details"
 )
-
-var editFlags = []cli.Flag{
-	cli.StringFlag{
-		Name:  "name, N",
-		Usage: "",
-	},
-	cli.StringFlag{
-		Name:  "description, D",
-		Usage: "",
-	},
-	cli.StringFlag{
-		Name:  "homepage, H",
-		Usage: "",
-	},
-	cli.BoolTFlag{
-		Name:  "issue, I",
-		Usage: "",
-	},
-	cli.BoolTFlag{
-		Name:  "wiki, W",
-		Usage: "",
-	},
-	cli.BoolTFlag{
-		Name:  "download, X",
-		Usage: "",
-	},
-	cli.BoolFlag{
-		Name:  "details, d",
-		Usage: "",
-	},
-}
 
 var Commands = []cli.Command{
 	commandCreate,
