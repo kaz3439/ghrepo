@@ -1,15 +1,11 @@
 package main
 
 import (
-	"bufio"
-	"code.google.com/p/goauth2/oauth"
 	"fmt"
 	"github.com/codegangsta/cli"
 	"github.com/google/go-github/github"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/wsxiaoys/terminal/color"
-	"os"
-	"strconv"
 	"time"
 )
 
@@ -187,29 +183,29 @@ func doCreate(c *cli.Context) {
 		return
 	}
 	if configuration.GithubToken == "" {
-		configuration.GithubToken = promptPersonalGithubToken()
+		configuration.GithubToken = PromptPersonalGithubToken()
 		configuration.Persist()
 	}
 
 	// set repository attributes
 	newRepository := github.Repository{Name: &name}
 	prompt := c.Bool(flagDetail)
-	if description := getRepositryField(flagDesc, c.String(flagDesc), prompt).(string); description != "" {
+	if description := GetRepositryField(flagDesc, c.String(flagDesc), prompt).(string); description != "" {
 		newRepository.Description = &description
 	}
-	if homepage := getRepositryField(flagHP, c.String(flagHP), prompt).(string); homepage != "" {
+	if homepage := GetRepositryField(flagHP, c.String(flagHP), prompt).(string); homepage != "" {
 		newRepository.Homepage = &homepage
 	}
-	if teamid := getRepositryField(flagTeamID, c.Int(flagTeamID), prompt).(int); teamid != 0 {
+	if teamid := GetRepositryField(flagTeamID, c.Int(flagTeamID), prompt).(int); teamid != 0 {
 		newRepository.TeamID = &teamid
 	}
-	private := getRepositryField(flagPrivate, c.Bool(flagPrivate), prompt).(bool)
+	private := GetRepositryField(flagPrivate, c.Bool(flagPrivate), prompt).(bool)
 	newRepository.Private = &private
-	issue := getRepositryField(flagIssue, c.Bool(flagIssue), prompt).(bool)
+	issue := GetRepositryField(flagIssue, c.Bool(flagIssue), prompt).(bool)
 	newRepository.HasIssues = &issue
-	wiki := getRepositryField(flagWiki, c.Bool(flagWiki), prompt).(bool)
+	wiki := GetRepositryField(flagWiki, c.Bool(flagWiki), prompt).(bool)
 	newRepository.HasWiki = &wiki
-	download := getRepositryField(flagDownload, c.Bool(flagDownload), prompt).(bool)
+	download := GetRepositryField(flagDownload, c.Bool(flagDownload), prompt).(bool)
 	newRepository.HasDownloads = &download
 
 	// create repository
@@ -295,22 +291,22 @@ func doEdit(c *cli.Context) {
 	// set repository attributes
 	repository = &github.Repository{}
 	prompt := c.Bool(flagDetail)
-	if name := getRepositryField(flagName, c.String(flagName), prompt).(string); name != "" {
+	if name := GetRepositryField(flagName, c.String(flagName), prompt).(string); name != "" {
 		repository.Name = &name
 	}
-	if description := getRepositryField(flagDesc, c.String(flagDesc), prompt).(string); description != "" {
+	if description := GetRepositryField(flagDesc, c.String(flagDesc), prompt).(string); description != "" {
 		repository.Description = &description
 	}
-	if homepage := getRepositryField(flagHP, c.String(flagHP), prompt).(string); homepage != "" {
+	if homepage := GetRepositryField(flagHP, c.String(flagHP), prompt).(string); homepage != "" {
 		repository.Homepage = &homepage
 	}
-	if issue := getRepositryField(flagIssue, c.String(flagIssue), prompt).(bool); issue != *repository.HasIssues {
+	if issue := GetRepositryField(flagIssue, c.String(flagIssue), prompt).(bool); issue != *repository.HasIssues {
 		repository.HasIssues = &issue
 	}
-	if wiki := getRepositryField(flagWiki, c.String(flagWiki), prompt).(bool); wiki != *repository.HasWiki {
+	if wiki := GetRepositryField(flagWiki, c.String(flagWiki), prompt).(bool); wiki != *repository.HasWiki {
 		repository.HasWiki = &wiki
 	}
-	if download := getRepositryField(flagDownload, c.String(flagDownload), prompt).(bool); download != *repository.HasDownloads {
+	if download := GetRepositryField(flagDownload, c.String(flagDownload), prompt).(bool); download != *repository.HasDownloads {
 		repository.HasDownloads = &download
 	}
 
@@ -408,52 +404,3 @@ func doOpen(c *cli.Context) {
     fmt.Println(openErr)
   }
 }
-
-func promptPersonalGithubToken() string {
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Printf("your personal github token: ")
-	scanner.Scan()
-	githubToken := scanner.Text()
-	return githubToken
-}
-
-func getRepositryField(name string, field interface{}, prompt bool) interface{} {
-	if prompt == false {
-		return field
-	}
-
-	var defaultPrompt string
-	switch field.(type) {
-	case string:
-		defaultPrompt = field.(string)
-	case bool:
-		defaultPrompt = strconv.FormatBool(field.(bool))
-	case int:
-		if field.(int) != 0 {
-			defaultPrompt = strconv.FormatInt(int64(field.(int)), 10)
-		} else {
-			defaultPrompt = ""
-		}
-	default:
-		defaultPrompt = ""
-	}
-
-	fmt.Printf("%s [%s] : ", name, defaultPrompt)
-	scan := bufio.NewScanner(os.Stdin)
-	scan.Scan()
-	text := scan.Text()
-	switch field.(type) {
-	case bool:
-		if res, err := strconv.ParseBool(text); err != nil {
-			field = res
-		}
-	case int:
-		if res, err := strconv.ParseInt(text, 10, 0); err != nil {
-			field = int(res)
-		}
-	default:
-		field = text
-	}
-	return field
-}
-
