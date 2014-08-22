@@ -11,7 +11,6 @@ import (
 	"os"
 	"strconv"
 	"time"
-	"regexp"
 )
 
 
@@ -385,26 +384,17 @@ func doOpen(c *cli.Context) {
   }
 
   if remote == "" {
-    for key := range gitconfig.Branch {
-      tree = key
-      break
-    }
-    if gitconfig.Branch[tree] == nil {
-      fmt.Println("invalid branch name")
+    result, currentBranchErr := gitconfig.RemoteURLFromCurrentBranch()
+    if currentBranchErr != nil {
+      fmt.Println(currentBranchErr)
       return
     }
-    remote = gitconfig.Branch[tree].Remote
+    remote = result
   }
 
-  var githubUrl string
-  if remoteIsURLPath(remote) {
-    githubUrl = fmt.Sprintf("https://github.com/%s", remote)
-  } else {
-    if gitconfig.Remote[remote] == nil {
-      fmt.Println("invalid remote name")
-      return
-    }
-    githubUrl = getUrlFromConfigRemote(gitconfig.Remote[remote].Url)
+  githubUrl, remoteURLErr := gitconfig.RemoteURL(remote)
+  if remoteURLErr != nil {
+    fmt.Println(remoteURLErr)
   }
 
   var openURL string
@@ -476,29 +466,3 @@ func getRepositryField(name string, field interface{}, prompt bool) interface{} 
 	return field
 }
 
-func remoteIsURLPath(remote string) bool {
-  if regexp.MustCompile("^[^/]+/[^/]+$").MatchString(remote) {
-    return true
-  } else {
-    return false
-  }
-}
-
-const (
-  sshURLRegex = "git@github.com:(.+).git"
-  svnURLRegex = "(https://github.com/.+).git"
-)
-
-func getUrlFromConfigRemote(remoteUrl string) string {
-  sshRegex := regexp.MustCompile(sshURLRegex)
-  svnRegex := regexp.MustCompile(svnURLRegex)
-  var githubUrl string
-  if  sshMatches := sshRegex.FindStringSubmatch(remoteUrl); len(sshMatches) == 2 { //ssh
-    githubUrl = fmt.Sprintf("https://github.com/%s", sshMatches[1])
-  } else if svnMatches := svnRegex.FindStringSubmatch(remoteUrl); len(svnMatches) == 2  { //svn
-    githubUrl = svnMatches[1]
-  } else { //https
-    githubUrl = remoteUrl
-  }
-  return githubUrl
-}

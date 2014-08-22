@@ -6,6 +6,7 @@ import (
   "code.google.com/p/gcfg"
   "path/filepath"
   "errors"
+  "regexp"
 )
 
 const gitConfigRelativePath = ".git/config"
@@ -47,4 +48,54 @@ func NewGitConfig() (*GitConfig, error) {
     return nil, err
   }
   return gitconfig, nil
+}
+
+const (
+  githubURL = "https://github.com"
+  sshURLRegex = "git@github.com:(.+).git"
+  svnURLRegex = "(https://github.com/.+).git"
+)
+
+func (gitconfig *GitConfig) RemoteURL(remoteName string) (string, error) {
+  if remoteIsURLPath(remoteName) {
+    return fmt.Sprintf("%s/%s", githubURL, remoteName), nil
+  }
+
+  remote := gitconfig.Remote[remoteName]
+  if remote == nil {
+    return "", errors.New("invalid remote name")
+  }
+
+  remoteUrl := remote.Url
+  sshRegex := regexp.MustCompile(sshURLRegex)
+  svnRegex := regexp.MustCompile(svnURLRegex)
+  var githubUrl string
+  if  sshMatches := sshRegex.FindStringSubmatch(remoteUrl); len(sshMatches) == 2 { //ssh
+    githubUrl = fmt.Sprintf("%s/%s", githubURL, sshMatches[1])
+  } else if svnMatches := svnRegex.FindStringSubmatch(remoteUrl); len(svnMatches) == 2  { //svn
+    githubUrl = svnMatches[1]
+  } else { //https
+    githubUrl = remoteUrl
+  }
+  return githubUrl, nil
+}
+
+func (gitconfig *GitConfig) RemoteURLFromCurrentBranch() (string, error) {
+    var tree string
+    for key := range gitconfig.Branch {
+      tree = key
+      break
+    }
+    if gitconfig.Branch[tree] == nil {
+      return "", errors.New("invalid branch name")
+    }
+    return gitconfig.Branch[tree].Remote, nil
+}
+
+func remoteIsURLPath(remote string) bool {
+  if regexp.MustCompile("^[^/]+/[^/]+$").MatchString(remote) {
+    return true
+  } else {
+    return false
+  }
 }
