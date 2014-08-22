@@ -191,29 +191,7 @@ func doCreate(c *cli.Context) {
 	// create repository
 	org := c.String(flagOrg)
 	client := NewClient(configuration)
-	resultRepository, networkErr := client.CreateRepository(org, &newRepository)
-	var repository *github.Repository
-	loop:
-	  for {
-	    select {
-	    case createErr := <-networkErr:
-		fmt.Printf("\n\n")
-		color.Printf("@{r}!!! Error Occured !!!")
-		fmt.Printf("\n\n")
-		fmt.Println(createErr)
-		fmt.Printf("\n\n")
-		break loop
-	      case repository = <-resultRepository:
-		break loop
-	      case <-time.After(time.Minute):
-		fmt.Println(" @{r} !!! Timeout !!! ")
-		break loop
-	      default:
-		time.Sleep(time.Second/2)
-		fmt.Printf(".")
-	    }
-	  }
-
+	repository, _ := observeChannel(client.CreateRepository(org, &newRepository))
 	if repository == nil {
 	  return
 	}
@@ -252,29 +230,7 @@ func doEdit(c *cli.Context) {
 	client := NewClient(configuration)
 
 	// get repository
-	resultGetRepository, networkGetErr := client.GetRepository(owner, repo)
-	var repository *github.Repository
-	getLoop:
-	  for {
-	    select {
-	    case repository = <-resultGetRepository:
-	      break getLoop
-	    case getErr := <-networkGetErr:
-	      fmt.Printf("\n\n")
-	      color.Printf("@{r} !!! Error Occuered !!! ")
-	      fmt.Printf("\n\n")
-	      fmt.Println(getErr)
-	      fmt.Printf("\n\n")
-	      break getLoop
-            case <-time.After(time.Minute):
-	      fmt.Println(" @{r} !!! Timeout !!! ")
-	      break getLoop
-	    default:
-	      time.Sleep(time.Second)
-	      fmt.Printf(".")
-	    }
-	  }
-
+	repository, _ := observeChannel(client.GetRepository(owner, repo))
 	if repository == nil {
 	  return
 	}
@@ -302,29 +258,7 @@ func doEdit(c *cli.Context) {
 	}
 
 	// edit repository
-	resultEditRepository, networkEditErr := client.EditRepository(owner, repo, repository)
-	var edittedRepository *github.Repository
-	loop:
-	  for {
-	    select {
-	      case editErr := <-networkEditErr:
-		fmt.Printf("\n\n")
-		color.Printf("@{r} !!! Error Occuered !!! ")
-		fmt.Printf("\n\n")
-		fmt.Println(editErr)
-		fmt.Printf("\n\n")
-		break loop
-	      case edittedRepository = <-resultEditRepository:
-		break loop
-	      case <-time.After(time.Minute):
-		fmt.Println(" @{r} !!! Timeout !!! ")
-		break loop
-	      default:
-		time.Sleep(time.Second)
-		fmt.Printf(".")
-	    }
-	  }
-
+	edittedRepository, _ := observeChannel(client.EditRepository(owner, repo, repository))
 	if edittedRepository == nil {
 	  return
 	}
@@ -385,3 +319,31 @@ func doOpen(c *cli.Context) {
     fmt.Println(openErr)
   }
 }
+
+
+func observeChannel(resultRepository <-chan *github.Repository, networkErr <-chan error) (*github.Repository, error) {
+	var repository *github.Repository
+	var err error
+	getLoop:
+	  for {
+	    select {
+	    case repository = <-resultRepository:
+	      break getLoop
+	    case getErr := <-networkErr:
+	      fmt.Printf("\n\n")
+	      color.Printf("@{r} !!! Error Occuered !!! ")
+	      fmt.Printf("\n\n")
+	      fmt.Println(getErr)
+	      fmt.Printf("\n\n")
+	      break getLoop
+            case <-time.After(time.Minute):
+	      fmt.Println(" @{r} !!! Timeout !!! ")
+	      break getLoop
+	    default:
+	      time.Sleep(time.Second/2)
+	      fmt.Printf(".")
+	    }
+	  }
+       return repository, err
+}
+
