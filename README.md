@@ -7,7 +7,7 @@ Description
 ghrepo is command line interface to operate repositories on Github.
 You can create or edit a repository, and open repository on Browser with it.
 
-ghrepo uses Github API ver. 3, please see (this page)[https://developer.github.com/v3/].
+ghrepo uses Github API ver. 3, please see [this page](https://developer.github.com/v3/).
 
 Installtion
 ======
