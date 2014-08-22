@@ -3,22 +3,23 @@ package main
 import (
 	"bufio"
 	"code.google.com/p/goauth2/oauth"
-	"errors"
 	"fmt"
 	"github.com/codegangsta/cli"
 	"github.com/google/go-github/github"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/wsxiaoys/terminal/color"
-	"code.google.com/p/gcfg"
 	"os"
 	"strconv"
 	"time"
 	"regexp"
-	"path/filepath"
 )
 
 
 var createFlags = []cli.Flag{
+	cli.StringFlag{
+		Name:  "organization, O",
+		Usage: "",
+	},
 	cli.StringFlag{
 		Name:  "description, D",
 		Usage: "",
@@ -54,6 +55,7 @@ var createFlags = []cli.Flag{
 }
 
 const (
+  flagOrg = "organization"
   flagDesc = "description"
   flagHP = "homepage"
   flagPrivate = "private"
@@ -212,11 +214,12 @@ func doCreate(c *cli.Context) {
 	newRepository.HasDownloads = &download
 
 	// create repository
+	org := c.String(flagOrg)
 	client := newGithubClient(configuration)
 	networkError := make(chan error)
 	resultRepository := make(chan *github.Repository)
 	go func () {
-	  repository, _, createErr := client.Repositories.Create("", &newRepository)
+	  repository, _, createErr := client.Repositories.Create(org, &newRepository)
 	  if createErr != nil {
 	    networkError <- createErr
 	  }
@@ -236,6 +239,9 @@ func doCreate(c *cli.Context) {
 		fmt.Printf("\n\n")
 		break loop
 	      case repository = <-resultRepository:
+		break loop
+	      case <-time.After(time.Minute):
+		fmt.Println(" @{r} !!! Timeout !!! ")
 		break loop
 	      default:
 		time.Sleep(time.Second/2)
@@ -334,11 +340,18 @@ func doEdit(c *cli.Context) {
 		break loop
 	      case edittedRepository = <-resultRepository:
 		break loop
+	      case <-time.After(time.Minute):
+		fmt.Println(" @{r} !!! Timeout !!! ")
+		break loop
 	      default:
 		time.Sleep(time.Second)
 		fmt.Printf(".")
 	    }
 	  }
+
+	if edittedRepository == nil {
+	  return
+	}
 
 	output := "\n\n" +
 		"=========================\n" +
@@ -361,30 +374,11 @@ func doEdit(c *cli.Context) {
 
 }
 
-type GitConfig struct {
-  Core struct {
-    Repositoryformatversion int
-    Filemode bool
-    Bare bool
-    Logallrefupdates bool
-    Ignorecase bool
-    Precomposeunicode bool
-  }
-  Remote map[string]*struct {
-    Url string
-    Fetch string
-  }
-  Branch map[string]*struct {
-    Remote string
-    Merge string
-  }
-}
-
 func doOpen(c *cli.Context) {
   remote := c.Args().Get(0)
   tree := c.Args().Get(1)
 
-  gitconfig, configErr := getGitConfig()
+  gitconfig, configErr := NewGitConfig()
   if configErr != nil {
     fmt.Println(configErr)
     return
@@ -480,28 +474,6 @@ func getRepositryField(name string, field interface{}, prompt bool) interface{} 
 		field = text
 	}
 	return field
-}
-
-const gitConfigRelativePath = ".git/config"
-
-func getGitConfig() (*GitConfig, error) {
-  currentDirectory, pathErr := filepath.Abs(filepath.Dir(os.Args[0]))
-  if pathErr != nil {
-    return nil, pathErr
-  }
-  gitconfigPath := fmt.Sprintf("%s/%s", currentDirectory, gitConfigRelativePath)
-  finfo, configFileErr := os.Stat(gitconfigPath)
-  if configFileErr != nil || finfo.IsDir() {
-    fileNotFoundError := errors.New("configuration file not found")
-    return nil, fileNotFoundError
-  }
-
-  gitconfig := &GitConfig{}
-  err := gcfg.ReadFileInto(gitconfig, gitconfigPath)
-  if err != nil {
-    return nil, err
-  }
-  return gitconfig, nil
 }
 
 func remoteIsURLPath(remote string) bool {
